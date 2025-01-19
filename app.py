@@ -3,8 +3,10 @@ import os
 import gc
 import tempfile
 import uuid
-import pandas as pd
 
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.prompts import PromptTemplate
+from langchain.output_parsers import StrOutputParser
 from gitingest import ingest
 import tempfile
 import uuid
@@ -15,10 +17,12 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 import streamlit as st
+from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
 st.title("GIT LLAMA 🦙 ")
+llm = ChatGroq(model="llama-3.1-8b-instant")
 
 if "id" not in st.session_state:
     st.session_state.id = uuid.uuid4()
@@ -57,8 +61,37 @@ with st.sidebar:
                 with open(content_path, "w", encoding="utf-8") as f:
                     f.write(content)
                 loader = DirectoryLoader(path=temp_dir)
+
                 docs = loader.load()
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=1000, chunk_overlap=200
                 )
                 documents = text_splitter.split_documents(docs)
+                vector_store = FAISS.from_documents(
+                    documents=documents, embedding=embeddings
+                )
+                retriever = vector_store.as_retriever()
+                ## Customised Chat prompt template
+                prompt = ChatPromptTemplate(
+                    input_variables=["tree", "context_str", "query_str"],
+                    template="""
+                    You are an AI assistant specialized in analyzing GitHub repositories.
+
+                    Repository structure:
+                    {tree}
+                    ---------------------
+
+                    Context information from the repository:
+                    {context_str}
+                    ---------------------
+
+                    Given the repository structure and context above, provide a clear and precise answer to the query. 
+                    Focus on the repository's content, code structure, and implementation details. 
+                    If the information is not available in the context, respond with 'I don't have enough information about that aspect of the repository.'
+
+                    Query: {query_str}
+                    Answer: """,
+                )
+                query = st.text_input("Enter your query here ")
+                output_parser = StrOutputParser()
+                # chain =llm|prompt|query|retriever|Stroutputparser

@@ -79,14 +79,11 @@ with st.sidebar:
                 )
                 retriever = vector_store.as_retriever()
 
-                prompt = ChatPromptTemplate(
-                    input_variables=["tree", "context", "query"],
-                    template="""
+                prompt = ChatPromptTemplate.from_template(
+                    """
                     You are an AI assistant specialized in analyzing GitHub repositories.
 
                     Repository structure:
-                    {tree}
-                    ---------------------
 
                     Context information from the repository:
                     {context}
@@ -96,7 +93,7 @@ with st.sidebar:
                     Focus on the repository's content, code structure, and implementation details.
                     If the information is not available in the context, respond with 'I don't have enough information about that aspect of the repository.'
 
-                    Query: {query}
+                    Query: {input}
                     Answer: """,
                 )
 
@@ -105,15 +102,21 @@ with st.sidebar:
                 document_chain = create_stuff_documents_chain(llm=llm, prompt=prompt)
                 retrieval_chain = create_retrieval_chain(retriever, document_chain)
 
-                if query:
-                    result = retrieval_chain.invoke(
-                        {
-                            "tree": tree,
-                            "context": "",  # Optionally, provide context information
-                            "query": query,
-                        }
-                    )
-                    st.write("Answer:", result["answer"])
+                # Add a button to submit the query
+                if st.button("Submit Query"):
+                    if query:
+                        result = retrieval_chain.invoke(
+                            {  # Optionally, provide context information
+                                "query": query,
+                                "context": "\n".join(
+                                    [doc.page_content for doc in documents]
+                                ),  # Add context
+                            }
+                        )
+                        st.write("Answer:", result["answer"])
+
+                    else:
+                        st.error("Please enter a query before submitting.")
 
                     # Cache loaded repo content
                     st.session_state.file_cache[file_key] = (summary, tree, content)

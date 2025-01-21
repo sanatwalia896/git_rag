@@ -1,3 +1,9 @@
+# this is the code made by Akshay Prashar in llamaIndex
+# linkeding akshay prashar -> https://www.linkedin.com/in/akshay-pachaar/
+
+# this is the reference code whose similar code I have tried to make using langchain
+
+# code  taken from -> https://github.com/patchy631/ai-engineering-hub/tree/main/github-rag
 import os
 
 import gc

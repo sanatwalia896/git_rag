@@ -26,6 +26,8 @@ st.markdown(
     """
     <style>
     .chat-message { padding: 1rem; margin: 1rem 0; border-radius: 0.5rem; }
+    
+
     .file-structure { font-family: monospace; white-space: pre-wrap; }
     </style>
 """,
@@ -154,11 +156,6 @@ with st.sidebar:
 
             progress_bar.progress(20)
 
-            # Reset retrieval chain and context for the new repository
-            st.session_state.retrieval_chain = None
-            st.session_state.context = None
-            st.session_state.chat_history = []
-
             if file_key not in st.session_state.file_cache:
                 summary, tree, content = process_with_gitingest(github_url)
                 progress_bar.progress(40)
@@ -195,23 +192,6 @@ with st.sidebar:
                 summary, tree, content = st.session_state.file_cache[file_key]
                 st.session_state.current_repo = repo_name
                 st.session_state.repo_structure = tree
-
-                # Recreate retrieval chain for cached repository
-                docs = [
-                    Document(page_content=tree, metadata={"type": "structure"}),
-                    Document(page_content=summary, metadata={"type": "summary"}),
-                    Document(page_content=content, metadata={"type": "content"}),
-                ]
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=1000, chunk_overlap=200
-                )
-                documents = text_splitter.split_documents(docs)
-
-                if documents:
-                    st.session_state.retrieval_chain = create_retrieval_chain_from_docs(
-                        documents
-                    )
-
                 progress_bar.progress(100)
                 st.success("Repository loaded from cache!")
 

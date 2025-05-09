@@ -1,7 +1,6 @@
 import os
 import uuid
 import gc
-import time
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -39,10 +38,15 @@ def reset_state():
     gc.collect()
 
 
-def create_retriever_chain(docs):
+def create_vector_store(docs):
+    """Create and return an in-memory FAISS vector store from the documents."""
     embedding_model = OllamaEmbeddings(model="all-minilm:33m")
-    db = FAISS.from_documents(docs, embedding_model)
-    retriever = db.as_retriever()
+    return FAISS.from_documents(docs, embedding_model)
+
+
+def create_retriever_chain_from_store(vector_store):
+    """Create a retrieval chain using FAISS retriever and LLM document chain."""
+    retriever = vector_store.as_retriever()
 
     prompt = ChatPromptTemplate.from_template(
         """
@@ -58,24 +62,29 @@ def create_retriever_chain(docs):
         {input}
 
         Answer:
-    """
+        """
     )
 
-    chain = create_stuff_documents_chain(llm=llm, prompt=prompt)
-    return create_retrieval_chain(retriever, chain)
+    document_chain = create_stuff_documents_chain(llm=llm, prompt=prompt)
+    return create_retrieval_chain(retriever, document_chain)
 
 
 def process_repository(url):
+    """Ingest and prepare the repository, build retriever chain."""
     summary, tree, content = ingest(url)
     st.session_state.repo_data = {"summary": summary, "tree": tree, "content": content}
+
     docs = [
         Document(page_content=tree, metadata={"type": "structure"}),
         Document(page_content=summary, metadata={"type": "summary"}),
         Document(page_content=content, metadata={"type": "content"}),
     ]
+
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     split_docs = splitter.split_documents(docs)
-    st.session_state.retrieval_chain = create_retriever_chain(split_docs)
+
+    vector_store = create_vector_store(split_docs)
+    st.session_state.retrieval_chain = create_retriever_chain_from_store(vector_store)
     return True
 
 
@@ -95,24 +104,24 @@ with st.sidebar:
     if col2.button("Reset Chat"):
         reset_state()
 
-# Main Interface
+# Main UI
 st.title("Git LLAMA 🦥 - GitHub Code Chatbot")
 
 if st.session_state.current_repo:
     st.markdown(f"### Current Repo: `{st.session_state.current_repo}`")
-    with st.expander("Repository Structure", expanded=False):
+
+    with st.expander("📂 Repository Structure", expanded=False):
         st.code(st.session_state.repo_data.get("tree", ""))
 
     for msg in st.session_state.chat_history:
-        role = "You" if msg["role"] == "user" else "Assistant"
+        role = "🧑 You" if msg["role"] == "user" else "🤖 Assistant"
         st.markdown(f"**{role}:** {msg['content']}")
 
     user_query = st.text_input("Ask something about the code")
     if st.button("Submit Query") and user_query:
         st.session_state.chat_history.append({"role": "user", "content": user_query})
         try:
-            chain = st.session_state.retrieval_chain
-            result = chain.invoke(
+            result = st.session_state.retrieval_chain.invoke(
                 {
                     "input": user_query,
                     "chat_history": str(st.session_state.chat_history),
@@ -126,4 +135,4 @@ if st.session_state.current_repo:
         except Exception as e:
             st.error(f"Failed to get response: {e}")
 else:
-    st.info("Load a GitHub repository from the sidebar to begin.")
+    st.info("📥 Load a GitHub repository from the sidebar to begin.")
